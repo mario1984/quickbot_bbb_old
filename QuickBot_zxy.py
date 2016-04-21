@@ -43,30 +43,63 @@ ENC_BUF_SIZE = 2**9
 ENC_IND = [0, 0]
 ENC_TIME = [[0]*ENC_BUF_SIZE, [0]*ENC_BUF_SIZE]
 ENC_VAL = [[0]*ENC_BUF_SIZE, [0]*ENC_BUF_SIZE]
+ENC_IND[side] = (ENC_IND[side] + 1) % ENC_BUF_SIZE
 
 ADC_LOCK = threading.Lock()
 
 ## Run variables
 RUN_FLAG = True
-RUN_FLAG_LOCK = threading.Lock()
+RUN_FLAG_LOCK = threading.Lock()  ### Create a new lock object.
 
 
-class QuickBot_zxy():
-    """The QuickBot_zxy Class"""
+class encoderRead(threading.Thread):
+    """The encoderRead Class"""
 
     # === Class Properties ===
     # Parameters
-    sampleTime = 20.0 / 1000.0
 
-    # Pins
-    ledPin = 'USR1'
+    # === Class Methods ===
+    # Constructor
+def __init__(self,encPin=('P9_39', 'P9_37')):
 
-    # Motor Pins -- (LEFT, RIGHT)
-    dir1Pin = ('P8_14', 'P8_12')
-    dir2Pin = ('P8_16', 'P8_10')
-    pwmPin = ('P9_16', 'P9_14')
+        # Initialize thread
+        threading.Thread.__init__(self)
 
-    # ADC Pins
+        # Set properties
+        self.encPin = encPin
+
+    # Methods
+    def run(self):
+    global RUN_FLAG
+
+    self.t0 = time.time()
+    while RUN_FLAG:
+    global ENC_IND
+    global ENC_TIME
+    global ENC_VAL
+
+    for side in range(0, 2):
+    ENC_TIME[side][ENC_IND[side]] = time.time() - self.t0
+    ADC_LOCK.acquire()
+    ENC_VAL[side][ENC_IND[side]] = ADC.read_raw(self.encPin[side])
+    time.sleep(ADCTIME)
+    ADC_LOCK.release()
+class QuickBot_zxy():
+"""The QuickBot_zxy Class"""
+
+# === Class Properties ===
+# Parameters
+sampleTime = 20.0 / 1000.0
+
+# Pins
+ledPin = 'USR1'
+
+# Motor Pins -- (LEFT, RIGHT)
+dir1Pin = ('P8_14', 'P8_12')
+dir2Pin = ('P8_16', 'P8_10')
+pwmPin = ('P9_16', 'P9_14')
+
+# ADC Pins
     irPin = ('P9_38', 'P9_40', 'P9_36', 'P9_35', 'P9_33')
     encoderPin = ('P9_39', 'P9_37')
 
@@ -152,18 +185,18 @@ class QuickBot_zxy():
         self.robotIP = robotIP
         self.robotSocket.bind((self.robotIP, self.port))
 
-        
+
         if DEBUG:
             ## Stats of encoder values while moving -- high, low, and all tick state
             self.encHighLowCntMin = 2**5  # Min number of recorded values to start calculating stats
             self.encHighMean = [0.0, 0.0]
             self.encHighVar = [0.0, 0.0]
             self.encHighTotalCnt = [0, 0]
-        
+
             self.encLowMean = [0.0, 0.0]
             self.encLowVar = [0.0, 0.0]
             self.encLowTotalCnt = [0, 0]
-        
+
             self.encNonZeroCntMin = 2**5
             self.encNonZeroMean = [0.0, 0.0]
             self.encNonZeroVar = [0.0, 0.0]
@@ -585,41 +618,6 @@ class QuickBot_zxy():
         print "Wrote buffer to output.txt"
 
 
-class encoderRead(threading.Thread):
-    """The encoderRead Class"""
-
-    # === Class Properties ===
-    # Parameters
-
-    # === Class Methods ===
-    # Constructor
-    def __init__(self,encPin=('P9_39', 'P9_37')):
-
-        # Initialize thread
-        threading.Thread.__init__(self)
-
-        # Set properties
-        self.encPin = encPin
-
-    # Methods
-    def run(self):
-        global RUN_FLAG
-
-        self.t0 = time.time()
-        while RUN_FLAG:
-            global ENC_IND
-            global ENC_TIME
-            global ENC_VAL
-
-            for side in range(0, 2):
-                ENC_TIME[side][ENC_IND[side]] = time.time() - self.t0
-                ADC_LOCK.acquire()
-                ENC_VAL[side][ENC_IND[side]] = ADC.read_raw(self.encPin[side])
-                time.sleep(ADCTIME)
-                ADC_LOCK.release()
-                ENC_IND[side] = (ENC_IND[side] + 1) % ENC_BUF_SIZE
-
-
 def recursiveMeanVar(x, l, mu, sigma2):
     """
     This function calculates a new mean and variance given
@@ -636,8 +634,3 @@ def recursiveMeanVar(x, l, mu, sigma2):
         sigma2Plus = 0
 
     return (muPlus, sigma2Plus, n)
-
-
-
-
-
